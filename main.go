@@ -4,55 +4,109 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"os/exec"
 )
 
-const SECRET_KEY string = "your-secret-key"
+const secretKey string = "your-secret-key"
 
 type StatusResponse struct {
 	Status string `json:"status"`
 }
 
 type BuildRequest struct {
-	RepoName string `json:"repo_name"`
+	Event string `json:"event"`
+	RepoName string `json:"repoName"`
+	CommitHash string `json:"commit"`
 }
 
 func main(){
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/build", func(w http.ResponseWriter, r *http.Request) {
+		deleteRepoClone := true
 		if r.Method != http.MethodPost{
 			http.Error(w,"Method not allowed",http.StatusMethodNotAllowed)
 			return
 		}
 		
-		var buildrequest BuildRequest
-		if err := json.NewDecoder(r.Body).Decode(&buildrequest); err != nil {
-			http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		var buildRequest BuildRequest
+		dec := json.NewDecoder(r.Body)
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&buildRequest); err != nil {
+			http.Error(w, "Invalid JSON: " + err.Error(), http.StatusBadRequest)
 			return
 		}
-		defer r.Body.Close()
+		fmt.Println(buildRequest)
 
-		auth_header := r.Header.Get("Authorization")
-		if len(auth_header) < 7 || auth_header[:7] != "Bearer " {
+		defer r.Body.Close()
+		defer func(){
+			if !deleteRepoClone {
+				return
+			}
+			cmd := exec.Command("rm", "-rf", "repo-clone")
+			err := cmd.Run()
+			if err != nil {
+				fmt.Printf("Deleting repo-clone directory failed: %v", err)
+			}
+		}()
+
+		authHeader := r.Header.Get("Authorization")
+		if len(authHeader) < 7 || authHeader[:7] != "Bearer " {
 			http.Error(w, "Invalid auth token", http.StatusUnauthorized)
 			return
 		}
 
-		auth_token := auth_header[7:]
-		if auth_token != SECRET_KEY {
+		authToken := authHeader[7:]
+		if authToken != secretKey {
 			http.Error(w, "Incorrect auth token", http.StatusUnauthorized)
 			return
 		}
+		fmt.Println("Request authorized")
 
+		_, err := os.Stat("repo-clone")
+		
+		if err == nil {
+			deleteRepoClone = false
+			http.Error(w, "Service in use", http.StatusLocked)
+			return
+		}
+		fmt.Println(err.Error())
+		fmt.Println("service available")
+		
+		cmd := exec.Command("git", "clone", "https://github.com/" + buildRequest.RepoName, "repo-clone")
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		
+		if err := cmd.Run(); err != nil {
+			fmt.Printf("Git clone failed: %v", err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		fmt.Println("Github repo cloned successfully:", buildRequest.RepoName)
+		w.Write([]byte("Github repo cloned successfully:"))
+		
+		imageName := buildRequest.RepoName + buildRequest.CommitHash
+		
+		cmd = exec.Command("docker", "build", "-t", imageName, "repo-clone")
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		
+		if err := cmd.Run(); err != nil {
+			fmt.Printf("docker build failed: %v", err)
+		}
+		fmt.Println("Image built successfully:", imageName)
+		
 		resp := StatusResponse{
 			Status: "starting build",
-		}		
+		}
+		
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusAccepted)
 		json.NewEncoder(w).Encode(resp)
 	})
 
-	fmt.Println("Server listening on port 8080")
+	fmt.Println("Running server on port 8080")
 	err := http.ListenAndServe(":8080", mux)
 	if err != nil {
 		fmt.Println(err)
