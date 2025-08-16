@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -8,8 +9,6 @@ import (
 	"os/exec"
 	"strings"
 )
-
-const secretKey string = "your-secret-key"
 
 type StatusResponse struct {
 	Status string `json:"status"`
@@ -22,6 +21,31 @@ type BuildRequest struct {
 }
 
 func main(){
+	f, err := os.Open(".env")
+	
+	if err != nil {
+		fmt.Println("Error opening file:", err)
+        return
+    }
+	defer f.Close()
+	scanner := bufio.NewScanner(f)
+
+	for scanner.Scan(){
+		line := scanner.Text()
+		if strings.TrimSpace(line) == "" || strings.HasPrefix(line, "#") {
+            continue
+        }
+
+		parts := strings.SplitN(line, "=", 2)
+        if len(parts) != 2 {
+            continue
+        }
+		key := strings.TrimSpace(parts[0])
+        val := strings.TrimSpace(parts[1])
+		fmt.Printf("%s=%s\n", key, val)
+		os.Setenv(key, val)
+	}
+
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/build", func(w http.ResponseWriter, r *http.Request) {
@@ -59,7 +83,7 @@ func main(){
 		}
 
 		authToken := authHeader[7:]
-		if authToken != secretKey {
+		if authToken != os.Getenv("secretKey") {
 			http.Error(w, "Incorrect auth token", http.StatusUnauthorized)
 			return
 		}
@@ -110,7 +134,7 @@ func main(){
 	})
 
 	fmt.Println("Running server on port 8080")
-	err := http.ListenAndServe(":8080", mux)
+	err = http.ListenAndServe(":8080", mux)
 	if err != nil {
 		fmt.Println(err)
 	}
