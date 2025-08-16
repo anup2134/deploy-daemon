@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"strings"
 )
 
 const secretKey string = "your-secret-key"
@@ -84,9 +85,9 @@ func main(){
 			return
 		}
 		fmt.Println("Github repo cloned successfully:", buildRequest.RepoName)
-		w.Write([]byte("Github repo cloned successfully:"))
 		
 		imageName := buildRequest.RepoName + buildRequest.CommitHash
+		imageName = strings.ToLower(imageName)
 		
 		cmd = exec.Command("docker", "build", "-t", imageName, "repo-clone")
 		cmd.Stdout = os.Stdout
@@ -94,6 +95,8 @@ func main(){
 		
 		if err := cmd.Run(); err != nil {
 			fmt.Printf("docker build failed: %v", err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
 		}
 		fmt.Println("Image built successfully:", imageName)
 		
