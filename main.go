@@ -125,7 +125,7 @@ func main(){
 		fmt.Println("Image built successfully:", imageName)
 		
 		resp := StatusResponse{
-			Status: "starting build",
+			Status: "success",
 		}
 		
 		w.Header().Set("Content-Type", "application/json")
