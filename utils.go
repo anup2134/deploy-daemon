@@ -106,7 +106,7 @@ func DecodeRequestJSON(requestBody io.ReadCloser) (BuildRequest, error){
 	if err := dec.Decode(&buildRequest); err != nil {
 		return BuildRequest {RepoName: "", Event: "", CommitHash: ""}, errors.New("Invalid JSON: " + err.Error())
 	}
-	if buildRequest.Event == "" || buildRequest.RepoName == "" || buildRequest.CommitHash == "" {
+	if buildRequest.Event == "" || buildRequest.RepoName == "" || buildRequest.Owner == "" || buildRequest.CommitHash == "" {
 		return BuildRequest {RepoName: "", Event: "", CommitHash: ""}, errors.New("missing required fields")
 	}
 
