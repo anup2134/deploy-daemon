@@ -47,7 +47,7 @@ func main(){
 		fmt.Println("Github repo cloned successfully:", buildRequest.RepoName)
 		defer DeleteRepo()
 		
-		imageName := "owner:" + buildRequest.Owner + "::name:" + buildRequest.RepoName + "::sha:" + buildRequest.CommitHash
+		imageName := buildRequest.Owner + "/" + buildRequest.RepoName + ":" + buildRequest.CommitHash
 		imageName = strings.ToLower(imageName)
 		err = BuildDockerImage(imageName)
 		if err != nil {
