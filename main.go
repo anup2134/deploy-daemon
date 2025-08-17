@@ -39,7 +39,7 @@ func main(){
 		}
 		fmt.Println("service available")
 		
-		err = CloneRepo(buildRequest.RepoName)
+		err = CloneRepo(buildRequest.Owner + "/" + buildRequest.RepoName)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
